@@ -1,13 +1,11 @@
-import torch.nn as nn
 import json
-from dynamic_network_architectures.architectures.unet import PlainConvUNet
-import torch
-from monai.transforms import (
-    Compose,
-    EnsureType,
-)
-from monai.data import Dataset, DataLoader
+
 import numpy as np
+import torch
+import torch.nn as nn
+from dynamic_network_architectures.architectures.unet import PlainConvUNet
+from monai.data import DataLoader, Dataset
+from monai.transforms import Compose, EnsureType
 
 
 def load_model_mr(model_dir):
@@ -77,10 +75,9 @@ def load_data(data):
     return train_loader
 
 
-def encode_mr(model, patches):
+def encode_mr(model: PlainConvUNet, patches: np.ndarray):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    adaptive_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
 
     # expand patch to match encoder input requirements
     patch_array = np.expand_dims(patches, axis=(0, 1))
@@ -89,11 +86,10 @@ def encode_mr(model, patches):
 
     model.eval()
     with torch.no_grad():
-        for input in train_loader:
-            input = input.to(device)
-            output = model.encoder(input)
-            # average pool and flatten the output to fit feature vector requirements
-            output_flat = adaptive_pool(output[-1])
-            out_flat = output_flat.flatten(start_dim=0)
+        input = next(iter(train_loader))
+        input = input.to(device)
+        output: list[torch.Tensor] = model.encoder(input)
+        # average pool and flatten the output to fit feature vector requirements
+        output_flat = output[-1].flatten(start_dim=0)
 
-    return out_flat.cpu().detach().numpy().tolist()
+    return output_flat.cpu().detach().numpy().tolist()
