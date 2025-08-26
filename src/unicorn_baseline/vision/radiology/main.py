@@ -103,18 +103,21 @@ def extract_features_segmentation(
     for patch, coords in tqdm(
         zip(patches, coordinates), total=len(patches), desc="Extracting features"
     ):
-        patch_array = sitk.GetArrayFromImage(patch)
         if domain == "CT":
+            patch_array = sitk.GetArrayFromImage(patch)
             features = encode(model, patch_array)
+            patch_features.append(
+                {
+                    "coordinates": coords[0],
+                    "features": features,
+                }
+            )
         if domain == "MR":
-            features = encode_mr(model, patch_array)
-
-        patch_features.append(
-            {
-                "coordinates": coords[0],
-                "features": features,
-            }
-        )
+            patch_features = encode_mr(
+                models=[model],
+                patch=patch,
+                start_coord=coords[0],
+            )
 
     patch_level_neural_representation = make_patch_level_neural_representation(
         patch_features=patch_features,
