@@ -1,8 +1,9 @@
+import itertools
 from typing import Iterable
+
 import numpy as np
 import SimpleITK as sitk
-from picai_prep.preprocessing import resample_img, crop_or_pad
-import itertools
+from picai_prep.preprocessing import crop_or_pad, resample_img
 
 
 def pad_image(image: sitk.Image, patch_size: Iterable[int]) -> sitk.Image:
@@ -53,7 +54,7 @@ def extract_patches(
             ((x_start, y_start, z_start), (x_end, y_end, z_end)) in world coordinates.
             Each coordinate pair represents the start and end points of the patch in the original image's physical space.
     """
-    if spacing is not None:
+    if spacing is not None and image.GetSpacing() != spacing:
         # resample image to specified spacing
         image = resample_img(
             image=image,
