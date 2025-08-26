@@ -233,7 +233,7 @@ def run_radiology_vision_task(
                     images_to_preprocess.get("adc"),
                 ],
                 settings=PreprocessingSettings(
-                    spacing=[3, 1.5, 1.5],
+                    spacing=[1.5, 1.5, 1.5],
                 ),
             )
             pat_case.preprocess()
