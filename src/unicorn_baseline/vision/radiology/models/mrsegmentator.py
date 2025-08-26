@@ -151,8 +151,7 @@ def encode_mr(
         ensemble_outputs.append(output)
 
     # ensemble the outputs
-    ensemble_output = np.concatenate(ensemble_outputs, axis=1)
-    print(f"Ensembled output shape: {ensemble_output.shape}")
+    ensemble_output = np.concatenate(ensemble_outputs)
 
     # create patch_features
     patch_features = [
