@@ -73,7 +73,9 @@ fi
 TASK_NAME=$(basename "$TASK_FOLDER")
 
 # Extract just the task number (e.g., "12" from "Task12_predicting_histopathology_sample_origin.zip")
-TASK_NUMBER=$(echo "$TASK_NAME" | grep -oP 'Task\K[0-9]+')
+raw="${TASK_NAME#Task}"
+raw="${raw%%_*}"
+TASK_NUMBER=$((10#$raw))
 
 # List of language tasks 
 LANGUAGE_TASKS=(12 13 14 15 16 17 18 19)

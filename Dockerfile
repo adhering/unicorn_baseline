@@ -76,6 +76,6 @@ COPY --chown=user:user setup.cfg /opt/app/unicorn_baseline/
 COPY --chown=user:user README.md /opt/app/unicorn_baseline/
 COPY --chown=user:user pyproject.toml /opt/app/unicorn_baseline/
 
-RUN python -m pip install  /opt/app/unicorn_baseline
+RUN python -m pip install -e /opt/app/unicorn_baseline
 
 ENTRYPOINT ["unicorn_baseline"]

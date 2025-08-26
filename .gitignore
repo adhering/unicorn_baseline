@@ -163,3 +163,8 @@ cython_debug/
 
 # custom
 model/
+/local_data
+.DS_Store
+model.tar.gz
+/test/output
+unicorn_baseline_*.tar.gz
