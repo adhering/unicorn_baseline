@@ -245,6 +245,7 @@ def run_radiology_vision_task(
                     domain=domain,
                     title=image_input["interface"]["slug"],
                     patch_size=[160, 128, 96],
+                    patch_spacing=[1.5, 1.5, 1.5],
                 )
                 neural_representations.append(neural_representation)
 
@@ -260,6 +261,7 @@ def run_radiology_vision_task(
                     domain=domain,
                     title=image_input["interface"]["slug"],
                     patch_size=[160, 128, 96],
+                    patch_spacing=[1.5, 1.5, 1.5],
                 )
                 neural_representations.append(neural_representation)
 
