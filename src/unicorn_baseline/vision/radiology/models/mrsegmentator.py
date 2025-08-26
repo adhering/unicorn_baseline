@@ -1,16 +1,35 @@
-import torch.nn as nn
 import json
-from dynamic_network_architectures.architectures.unet import PlainConvUNet
-import torch
-from monai.transforms import (
-    Compose,
-    EnsureType,
-)
-from monai.data import Dataset, DataLoader
+from typing import Any
+
 import numpy as np
+import SimpleITK as sitk
+import torch
+import torch.nn as nn
+from dynamic_network_architectures.architectures.unet import (PlainConvEncoder,
+                                                              PlainConvUNet)
+from monai.data import DataLoader, Dataset
+from monai.transforms import Compose, EnsureType
 
 
-def load_model_mr(model_dir):
+def remove_last_relu_encoder(model):
+    last_relu_block = None
+
+    # Iterate through encoder modules
+    for m in model.modules():
+        if hasattr(m, "nonlin") and isinstance(m.nonlin, nn.ReLU):
+            last_relu_block = m
+
+    if last_relu_block is not None:
+        last_relu_block.nonlin = nn.Identity()
+        # also fix inside `all_modules`
+        if isinstance(last_relu_block.all_modules[-1], nn.ReLU):
+            last_relu_block.all_modules[-1] = nn.Identity()
+        print("Replaced last encoder ReLU with Identity.")
+    else:
+        print("No ReLU found in encoder!")
+
+
+def load_model_mr(model_dir, fold: int = 0) -> PlainConvEncoder:
     with open(f"{model_dir}/plans.json") as f:
         plans = json.load(f)
 
@@ -57,11 +76,13 @@ def load_model_mr(model_dir):
         nonlin_kwargs={"inplace": True},
     )
     weights = torch.load(
-        f"{model_dir}/fold_0/checkpoint_final.pth",
+        f"{model_dir}/fold_{fold}/checkpoint_final.pth",
         map_location=torch.device("cpu"),
         weights_only=False,
     )
     model.load_state_dict(weights["network_weights"])
+    model = model.encoder
+    remove_last_relu_encoder(model)
     return model
 
 
@@ -77,23 +98,93 @@ def load_data(data):
     return train_loader
 
 
-def encode_mr(model, patches):
+def encode_mr(
+    *,
+    models: list[PlainConvEncoder],
+    patch: sitk.Image,
+    start_coord: tuple[float, float, float],
+) -> tuple[list[dict[str, Any]], tuple[int, int, int]]:
+    """Encodes a given MR patch using an ensemble of convolutional encoders.
+
+    This function takes a SimpleITK image patch, processes it through a list of
+    encoder models, and extracts feature vectors from the deepest layer of each model.
+    The outputs from the models are ensembled by concatenation. It then calculates
+    the world coordinates for each feature vector in the resulting feature map and
+    packages them into a list of dictionaries.
+
+    Args:
+        models: A list of PlainConvEncoder models to be used for encoding.
+        patch: A SimpleITK Image object representing the patch to be encoded.
+        start_coord: The physical world coordinate (x, y, z) of the starting
+            point of the patch.
+
+    Returns:
+        A tuple containing:
+        - A list of dictionaries, where each dictionary holds the 'coordinates'
+          (as a tuple of floats) and 'features' (as a numpy array) for a
+          sub-patch.
+        - A tuple representing the stride (x, y, z) used to calculate the
+          sub-patch coordinates, corresponding to the model's downsampling factor.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    adaptive_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+    # convert patch starting coordinate from physical to voxel index
+    start_coord = patch.TransformPhysicalPointToIndex(start_coord)  # x, y, z
+
+    # convert patch to numpy
+    patch_array = sitk.GetArrayFromImage(patch)
 
     # expand patch to match encoder input requirements
-    patch_array = np.expand_dims(patches, axis=(0, 1))
+    patch_array = np.expand_dims(patch_array, axis=(0, 1))
 
-    train_loader = load_data(patch_array)
-
-    model.eval()
-    with torch.no_grad():
-        for input in train_loader:
+    ensemble_outputs = []
+    for model in models:
+        model.to(device)
+        model.eval()
+        with torch.no_grad():
+            train_loader = load_data(patch_array)
+            input = next(iter(train_loader))
             input = input.to(device)
-            output = model.encoder(input)
-            # average pool and flatten the output to fit feature vector requirements
-            output_flat = adaptive_pool(output[-1])
-            out_flat = output_flat.flatten(start_dim=0)
+            output: list[torch.Tensor] = model(input)
 
-    return out_flat.cpu().detach().numpy().tolist()
+        output = output[-1]  # select deepest layer
+
+        # convert to numpy
+        output = output.cpu().detach().numpy()  # z, y, x
+        ensemble_outputs.append(output)
+
+    # ensemble the outputs
+    ensemble_output = np.concatenate(ensemble_outputs, axis=1)
+    print(f"Ensembled output shape: {ensemble_output.shape}")
+
+    # create sub-patch coordinates
+    stride = (2**5, 2**5, 2**4)  # x, y, z
+    sub_coords = []
+    sub_outputs = []
+    for x_step in range(ensemble_output.shape[-1]):
+        for y_step in range(ensemble_output.shape[-2]):
+            for z_step in range(ensemble_output.shape[-3]):
+                features = ensemble_output[..., z_step, y_step, x_step].squeeze()
+                coord = (
+                    start_coord[0] + x_step * stride[0],
+                    start_coord[1] + y_step * stride[1],
+                    start_coord[2] + z_step * stride[2],
+                )
+                sub_outputs.append(features)
+                sub_coords.append(coord)
+
+    # convert sub coordinates to world coordines
+    sub_coords = [
+        patch.TransformIndexToPhysicalPoint(coord)
+        for coord in sub_coords
+    ]
+
+    # create patch_features
+    patch_features = [
+        {
+            "coordinates": coord,
+            "features": features,
+        }
+        for coord, features in zip(sub_coords, sub_outputs)
+    ]
+
+    return patch_features, stride

@@ -19,18 +19,16 @@ import numpy as np
 import SimpleITK as sitk
 import torch
 import torch.nn.functional as F
+from picai_prep.preprocessing import PreprocessingSettings, Sample
 from torch import nn
 from tqdm import tqdm
 
 from unicorn_baseline.io import resolve_image_path, write_json_file
 from unicorn_baseline.vision.radiology.models.ctfm import encode, load_model
+from unicorn_baseline.vision.radiology.models.mrsegmentator import (
+    encode_mr, load_model_mr)
 from unicorn_baseline.vision.radiology.models.smalldinov2 import SmallDINOv2
 from unicorn_baseline.vision.radiology.patch_extraction import extract_patches
-from picai_prep.preprocessing import Sample, PreprocessingSettings
-from unicorn_baseline.vision.radiology.models.mrsegmentator import (
-    encode_mr,
-    load_model_mr,
-)
 
 
 def extract_features_classification(
@@ -70,7 +68,7 @@ def extract_features_segmentation(
     model_dir: str,
     domain: str,
     title: str = "patch-level-neural-representation",
-    patch_size: list[int] = [16, 64, 64],
+    patch_size: list[int] = [160, 128, 96],
     patch_spacing: list[float] | None = None,
 ) -> list[dict]:
     """
@@ -95,30 +93,41 @@ def extract_features_segmentation(
     )
     if patch_spacing is None:
         patch_spacing = image.GetSpacing()
+        print(f"Using default patch spacing: {patch_spacing}")
 
     if domain == "CT":
         model = load_model(Path(model_dir, "ctfm"))
     if domain == "MR":
-        model = load_model_mr(Path(model_dir, "mrsegmentator"))
+        models = [
+            load_model_mr(
+                model_dir=Path(model_dir, "mrsegmentator"),
+                fold=fold
+            )
+            for fold in range(5)
+        ]
     print(f"Extracting features from patches")
     for patch, coords in tqdm(
         zip(patches, coordinates), total=len(patches), desc="Extracting features"
     ):
-        patch_array = sitk.GetArrayFromImage(patch)
         if domain == "CT":
+            patch_array = sitk.GetArrayFromImage(patch)
             features = encode(model, patch_array)
-        if domain == "MR":
-            features = encode_mr(model, patch_array)
-        patch_features.append(
-            {
-                "coordinates": coords[0],
-                "features": features,
-            }
-        )
+            patch_features.append(
+                {
+                    "coordinates": coords[0],
+                    "features": features,
+                }
+            )
+        elif domain == "MR":
+            sub_patch_features, sub_patch_size = encode_mr(models=models, patch=patch, start_coord=coords[0])
+            patch_features.extend(sub_patch_features)
+        else:
+            raise ValueError(f"Unexpected domain: {domain}")
+
 
     patch_level_neural_representation = make_patch_level_neural_representation(
         patch_features=patch_features,
-        patch_size=patch_size,
+        patch_size=sub_patch_size if domain == "MR" else patch_size,
         patch_spacing=patch_spacing,
         image_size=image.GetSize(),
         image_origin=image.GetOrigin(),
@@ -185,7 +194,8 @@ def run_radiology_vision_task(
             if scan_path is None:
                 continue
 
-            from unicorn_baseline.vision.radiology.dataset import get_scan_dataset
+            from unicorn_baseline.vision.radiology.dataset import \
+                get_scan_dataset
 
             dataset = get_scan_dataset(scan_path, seed=42)
 
@@ -223,7 +233,7 @@ def run_radiology_vision_task(
                     images_to_preprocess.get("adc"),
                 ],
                 settings=PreprocessingSettings(
-                    spacing=[3, 1.5, 1.5], matrix_size=[16, 256, 256]
+                    spacing=[3, 1.5, 1.5],
                 ),
             )
             pat_case.preprocess()
@@ -234,7 +244,7 @@ def run_radiology_vision_task(
                     model_dir=model_dir,
                     domain=domain,
                     title=image_input["interface"]["slug"],
-                    patch_size = [16, 64, 64],
+                    patch_size=[160, 128, 96],
                 )
                 neural_representations.append(neural_representation)
 
@@ -249,7 +259,7 @@ def run_radiology_vision_task(
                     model_dir=model_dir,
                     domain=domain,
                     title=image_input["interface"]["slug"],
-                    patch_size = [16, 128, 128],
+                    patch_size=[160, 128, 96],
                 )
                 neural_representations.append(neural_representation)
 
