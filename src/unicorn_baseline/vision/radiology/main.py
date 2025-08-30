@@ -69,12 +69,21 @@ def extract_features_segmentation(
     model_dir: str,
     domain: str,
     title: str = "patch-level-neural-representation",
-    patch_size: list[int] = [160, 128, 96],
+    patch_size: list[int] | None = None,
     patch_spacing: list[float] | None = None,
 ) -> list[dict]:
     """
     Generate a list of patch features from a radiology image
     """
+    if domain == "CT":
+        patch_size = [160, 160, 96]
+        patch_spacing = [1.0, 1.0, 1.0]
+    elif domain == "MR":
+        patch_size = [160, 128, 96]
+        patch_spacing = [1.5, 1.5, 1.5]
+    else:
+        raise ValueError(f"Unexpected domain: {domain}")
+
     patch_features = []
 
     print(f"Extracting patches from image")
@@ -89,7 +98,7 @@ def extract_features_segmentation(
 
     if domain == "CT":
         model = load_model_ct(Path(model_dir, "ctfm"))
-    if domain == "MR":
+    elif domain == "MR":
         models = [
             load_model_mr(
                 model_dir=Path(model_dir, "mrsegmentator"),
@@ -97,6 +106,9 @@ def extract_features_segmentation(
             )
             for fold in range(5)
         ]
+    else:
+        raise ValueError(f"Unexpected domain: {domain}")
+
     print(f"Extracting features from patches")
     for patch, coords in tqdm(
         zip(patches, coordinates), total=len(patches), desc="Extracting features"
@@ -109,7 +121,6 @@ def extract_features_segmentation(
             patch_features.extend(sub_patch_features)
         else:
             raise ValueError(f"Unexpected domain: {domain}")
-
 
     patch_level_neural_representation = make_patch_level_neural_representation(
         patch_features=patch_features,
@@ -246,8 +257,6 @@ def run_radiology_vision_task(
                     model_dir=model_dir,
                     domain=domain,
                     title=image_input["interface"]["slug"],
-                    patch_size=[160, 128, 96],
-                    patch_spacing=[1.5, 1.5, 1.5],
                 )
                 neural_representations.append(neural_representation)
 
