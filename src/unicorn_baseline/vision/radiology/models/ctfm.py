@@ -82,7 +82,7 @@ def encode_ct(
     output = final_layer_output.cpu().detach().numpy()
 
     # extract features from each spatial location (sub-patch approach)
-    stride = (2**5, 2**5, 2**5)  # x, y, z, TODO: verify the stride
+    stride = (2**4, 2**4, 2**4)  # x, y, z
     sub_coords = []
     sub_outputs = []
     for x_step in range(output.shape[-1]):

@@ -159,7 +159,6 @@ def encode_mr(
 
     # ensemble the outputs
     ensemble_output = np.concatenate(ensemble_outputs, axis=1)
-    print(f"Ensembled output shape: {ensemble_output.shape}")
 
     # create sub-patch coordinates
     stride = (2**5, 2**5, 2**4)  # x, y, z
