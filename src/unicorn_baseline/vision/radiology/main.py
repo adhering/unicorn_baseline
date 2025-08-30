@@ -76,15 +76,6 @@ def extract_features_segmentation(
     """
     patch_features = []
 
-    image_orientation = sitk.DICOMOrientImageFilter_GetOrientationFromDirectionCosines(
-        image.GetDirection()
-    )
-    if (image_orientation != "SPL") and (domain == "CT"):
-        image = sitk.DICOMOrient(image, desiredCoordinateOrientation="SPL")
-
-    if (image_orientation != "LPS") and (domain == "MR"):
-        image = sitk.DICOMOrient(image, desiredCoordinateOrientation="LPS")
-
     print(f"Extracting patches from image")
     patches, coordinates, image = extract_patches(
         image=image,
