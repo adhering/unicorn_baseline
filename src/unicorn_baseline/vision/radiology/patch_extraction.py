@@ -1,7 +1,6 @@
 import itertools
 from typing import Iterable
 
-import numpy as np
 import SimpleITK as sitk
 from picai_prep.preprocessing import crop_or_pad, resample_img
 
@@ -19,7 +18,6 @@ def pad_image(image: sitk.Image, patch_size: Iterable[int]) -> sitk.Image:
     Returns:
         sitk.Image: Padded SimpleITK image with dimensions divisible by `patch_size`.
     """
-    min_val = float(sitk.GetArrayFromImage(image).min())
     size = image.GetSize()
     pad = [(p - s % p) % p for s, p in zip(size, patch_size)]
     new_size = tuple(s + pad_dim for s, pad_dim in zip(size, pad))

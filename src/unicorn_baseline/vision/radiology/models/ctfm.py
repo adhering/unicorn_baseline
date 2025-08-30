@@ -1,16 +1,9 @@
-from lighter_zoo import SegResNet
-from monai.transforms import (
-    Compose,
-    LoadImage,
-    EnsureType,
-    ScaleIntensityRange,
-    Orientation,
-    Resize,
-)
-from monai.data import Dataset, DataLoader
-import torch.nn as nn
 import numpy as np
 import torch
+import torch.nn as nn
+from lighter_zoo import SegResNet
+from monai.data import DataLoader, Dataset
+from monai.transforms import Compose, EnsureType, ScaleIntensityRange
 
 
 def load_model(model_path):
