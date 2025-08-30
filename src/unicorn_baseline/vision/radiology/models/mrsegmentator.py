@@ -7,8 +7,11 @@ import torch
 import torch.nn as nn
 from dynamic_network_architectures.architectures.unet import (PlainConvEncoder,
                                                               PlainConvUNet)
-from monai.data import DataLoader, Dataset
-from monai.transforms import Compose, EnsureType
+from monai.data.dataloader import DataLoader
+from monai.data.dataset import Dataset
+from monai.transforms.compose import Compose
+from monai.transforms.intensity.array import NormalizeIntensity
+from monai.transforms.utility.array import EnsureType
 
 
 def remove_last_relu_encoder(model):
@@ -86,10 +89,11 @@ def load_model_mr(model_dir, fold: int = 0) -> PlainConvEncoder:
     return model
 
 
-def load_data(data):
+def load_data(data) -> DataLoader:
     train_transforms = Compose(
         [
             EnsureType(dtype=torch.float32),
+            NormalizeIntensity(),
         ]
     )
 
@@ -127,6 +131,7 @@ def encode_mr(
           sub-patch coordinates, corresponding to the model's downsampling factor.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # convert patch starting coordinate from physical to voxel index
     start_coord = patch.TransformPhysicalPointToIndex(start_coord)  # x, y, z
 
