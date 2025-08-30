@@ -24,7 +24,8 @@ from torch import nn
 from tqdm import tqdm
 
 from unicorn_baseline.io import resolve_image_path, write_json_file
-from unicorn_baseline.vision.radiology.models.ctfm import encode, load_model
+from unicorn_baseline.vision.radiology.models.ctfm import (encode_ct,
+                                                           load_model_ct)
 from unicorn_baseline.vision.radiology.models.mrsegmentator import (
     encode_mr, load_model_mr)
 from unicorn_baseline.vision.radiology.models.smalldinov2 import SmallDINOv2
@@ -87,7 +88,7 @@ def extract_features_segmentation(
         print(f"Using default patch spacing: {patch_spacing}")
 
     if domain == "CT":
-        model = load_model(Path(model_dir, "ctfm"))
+        model = load_model_ct(Path(model_dir, "ctfm"))
     if domain == "MR":
         models = [
             load_model_mr(
@@ -101,14 +102,8 @@ def extract_features_segmentation(
         zip(patches, coordinates), total=len(patches), desc="Extracting features"
     ):
         if domain == "CT":
-            patch_array = sitk.GetArrayFromImage(patch)
-            features = encode(model, patch_array)
-            patch_features.append(
-                {
-                    "coordinates": coords[0],
-                    "features": features,
-                }
-            )
+            sub_patch_features, sub_patch_size = encode_ct(model=model, patch=patch, start_coord=coords[0])
+            patch_features.extend(sub_patch_features)
         elif domain == "MR":
             sub_patch_features, sub_patch_size = encode_mr(models=models, patch=patch, start_coord=coords[0])
             patch_features.extend(sub_patch_features)
